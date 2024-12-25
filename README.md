@@ -1,4 +1,4 @@
-# VTK_2.5 (Updated for Python 3.11)
+# VTK_2.5
 
 Voice User Interface (VUI) Tookkit (VTK)
 
@@ -31,8 +31,6 @@ Outputs simulations as all paths through the graph in order to provide user jour
 Outputs simulations in Cyara XML format, automatically creating regression suites
 
 Saves all interactions for further analysis
-
-See https://www.youtube.com/playlist?list=PLret8tg2KaxCvc2igN1osvFJPsbw31LPV for videos
 
 Does anything else you would like to develop
 
