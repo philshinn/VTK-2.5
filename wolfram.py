@@ -4,7 +4,7 @@ import requests
 import xml.etree.ElementTree as ET
 
 def wolfram():
-    dbg = True
+    dbg = False
     vtkWolframAppID = '&appid=H2VK7E-WLKUW5PTX3'
     vtkWolframURL = "http://api.wolframalpha.com/v2/query?input="
     #while 1:
@@ -30,6 +30,8 @@ def wolfram():
 if __name__ == "__main__":
     result = wolfram()
     root = ET.fromstring(result.content)
-    with open("wolfram.xml", "w") as text_file:
-        text_file.write("%s" % result.content)
+    foo = result.content.decode()
+    with open("wolfram.xml", "w",encoding="utf-8") as text_file:
+        text_file.write("%s" % foo)
+
     

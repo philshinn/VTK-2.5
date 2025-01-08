@@ -127,7 +127,10 @@ class VTK_GUI_Generator(object):
         if f:
             self.rewriteEntryField(self.xmlFileText, f)
             self.workingDir = os.path.dirname(f)
-            result = subprocess.Popen(["draw.io.exe","C:\\Users\\pshinns7\\documents\\VTK_2.5\\VTK 2.6 DB.xml"])
+            os.chdir(self.workingDir)
+            #result = subprocess.Popen(["draw.io.exe","C:\\Users\\pshinns7\\documents\\VTK_2.5\\VTK 2.6 DB.xml"])
+            #result = subprocess.Popen(["draw.io.exe","C:\\Users\\pshinns7\\documents\\VTK_2.5\\VTK 2.6 DB.xml"])
+            result = subprocess.Popen(["draw.io.exe",f])
 
 
     def onOutputFileSelect(self, event=None):

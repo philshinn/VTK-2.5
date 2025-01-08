@@ -375,7 +375,7 @@ class PromptState(State):                                           # A Prompt s
 
 class InitDB(State):                                                # Initialize a database, create tables, populate with values
     def __init__(self,dic,sm):
-        dbg = True
+        dbg = False
         State.__init__(self,dic,sm)
         if dbg: print("+++++++++initializing db")
         if hasattr(self,"DBName"):
@@ -398,7 +398,7 @@ class InitDB(State):                                                # Initialize
 
 class AccessDB(State):                                              # initialize a database, create tables, populate with values
     def __init__(self,dic,sm):
-        dbg = True
+        dbg = False
         State.__init__(self,dic,sm)
         if hasattr(self,"DBName"):
             if os.name == 'posix':
@@ -413,7 +413,7 @@ class AccessDB(State):                                              # initialize
     def run(self,sm):
         # VTK_doesAccountNumberAndPINMatch(dbName,1111,1111)
         #returnValue = VTK_DB.VTK_doesAccountNumberAndPINMatch('VTK_DB.db','1111','1111')
-        dbg = True
+        dbg = False
         args = self.Args
         if dbg: print("  Info: in AccessDB.run, args=",args)
         importStr = "from "+self.AccessDBModule + " import *"
@@ -480,16 +480,20 @@ class PythonState(State):                                           # A python s
         except KeyError:
             if len(self.nextStates) == 1:
                 runResult.nextState = list(self.nextStates.values())[0]
-        myStr = 'import ' + self.PythonRoutineName[:-3]
-        exec(myStr)
+
+        returnValue = ""
+        myStr = open(self.PythonRoutineName).read()
         if dbg: print("  Info: in PythonState.run(): myStr=",myStr)
-        myStr =  self.PythonRoutineName[:-3]
-        myExecStr = "returnValue = " + myStr + "." + myStr + "()"
-        if dbg: print("  Info: in PythonState.run(): myExecStr=",myExecStr)
-        exec(myExecStr)
-        if dbg: print("  Info: in PythonState.run(): returnValue=",returnValue)
-        myMod = sys.modules[myStr]
-        if dbg: print("  Info: in PythonState.run(): myMod=",myMod)
+        exec( myStr,globals(),globals())
+        #if dbg: print(ex_Locals['returnValue'])
+        if 'returnValue' in globals().keys():
+            returnValue = globals()['returnValue']
+
+        if dbg: print("  Info: Python.run, returnValue=",returnValue)
+        
+        #sm.db[self.ReturnValue] = ex_locals['returnValue']
+        #runResult = RunResult()
+
         return runResult       
         
 class Grammar:                                                      # User's input is parsed by a grammar, returning meaning
@@ -635,7 +639,7 @@ class GrammarState(State):                                          # A grammar 
 
 class Edge(State):                                                  # These are the arcs or arrows connecting up the graph
     def __init__(self,element,sm):
-        dbg = True
+        dbg = False
         if dbg:
             print("making edge:",json.dumps(self.__dict__)) 
         for attrKey in list(element.attrib.keys()):
@@ -658,13 +662,13 @@ class Edge(State):                                                  # These are 
 
 class DecisionState(State):                                         # Branches flow through the graph depending on variables' values
     def __init__(self,dic,sm):
-        dbg = True
+        dbg = False
         if (dbg):print("--> DecisionState init\n\t",dic)
         State.__init__(self,dic,sm)
         if dbg: self.dump()
         if (dbg):print("<-- DecisionState init")
     def run(self,sm):
-        dbg = True
+        dbg = False
         if dbg: print("Info: in DecisionState.run, dir(self)=",dir(self))
         runResult = RunResult()
         if dbg: print("Info: DecisionState.nextStates=",self.nextStates)
@@ -804,7 +808,7 @@ class StateMachine:                                                 # Creates th
         return ','.join([json.dumps(obj.__dict__,sort_keys=True,indent=4,separators=(',',':')) for obj in list(thing.values())])
 
     def readDrawIOXMLFile(self,fileName):                               # parses an exported draw.io regular XML graphical VUI design into python objects
-        dbg = True
+        dbg = False
         if dbg: print("--> readXMLFile")
         tree = etree.parse(fileName)                                    # parse the XML file
         root = tree.getroot()                                           # get the root
@@ -927,7 +931,7 @@ class StateMachine:                                                 # Creates th
         # go through the grammar states and make sure that every grammar referred to by a grammar state exists
         # and check that the semantic labels on the outgoing arcs of the grammar exist in a referred-to grammar
     def reconcileGrammarStateReferencesToGrammars(self):                # ensures that grammars referred to actually exist
-        dbg = True
+        dbg = False
         semanticMeanings = []
         if dbg: print("Info: Reconciling grammar references with grammars...")
         if dbg: print("Info: self.grammarStateIDs=",self.grammarStateIDs)
@@ -967,7 +971,7 @@ class StateMachine:                                                 # Creates th
             if dbg: print("Info: No issues reconciling grammars.")
 
     def run(self,stateName=None,simulation=False,simDict=None):         # runs the state machine
-        dbg = True
+        dbg = False
         notDone = True
         if dbg:
             print("\nInfo: sm.run: starting.  stateName=",stateName,"simulation=",simulation,"simDict=",simDict)
@@ -1016,8 +1020,9 @@ class StateMachine:                                                 # Creates th
                     thisStep = Step()
                     thisStep.promptText = outputText
                     self.log.steps.append(thisStep)
-                    print(outputText)
-                    userInput = input()
+                    self.printOutput(outputText)
+                    #userInput = input()
+                    userInput = self.getUserInput()
                     thisStep = Step()
                     thisStep.replyText = userInput
                     self.log.steps.append(thisStep)
@@ -1186,6 +1191,16 @@ class StateMachine:                                                 # Creates th
             outputText = outputText + ' ' + newValue
         if dbg: print("  Info: In stateMachine.flushBuffer() 2: outputText=",outputText)
         return outputText
+    
+    def printOutput(self,text):
+        dbg = False
+        print(text)
+
+    def getUserInput(self):
+        dbg = False
+        userInput = input()
+        return userInput
+
 
 class NewStateMachine():
     def __init__(self,inputFileName):
@@ -1202,8 +1217,10 @@ if __name__ == "__main__":
     #startStateName = 'Module2Start'
     #nsm = NewStateMachine(inputFileName)
     #nsm.stateMachine.run(startStateName)
-    inputFileName = "VTK 2.6 DB.xml" 
-    startStateName = 'StartDBExample'
+    #inputFileName = "VTK 2.6 DB.xml" 
+    #startStateName = 'StartDBExample'
+    inputFileName = "VTK 2.5.xml" 
+    startStateName = 'WolframStart'
     nsm = NewStateMachine(inputFileName)
     nsm.stateMachine.run(startStateName)
         # run the statemachine live with user input 

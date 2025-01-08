@@ -1,8 +1,2 @@
-from VTK_Code import *
-
-def spam():
-    print("Hello world!")
-    return 'aaa'
-
-if __name__ == "__main__":
-    spam()
+returnValue = {'foo':'bar','anotherValue':27}
+print("hello world")
