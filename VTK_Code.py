@@ -17,9 +17,13 @@ from xml.dom import minidom
 class Step():                                                       # A step in Cyara xml format
     def __init__(self):
         self.timeStamp = time.strftime("%c")
-        self.name = None
-        self.replyText = None
-        self.promptText = None
+        self.name = None                                            # for the description field
+        self.type = None                                            # either prompt or grammar.  A grammar step takes an input
+        self.replyText = None                                       # what the user says
+        self.promptText = None                                      # what the box says
+        self.replyType = None                                       # could be dtmf or speech now, maybe other types like clicks in the future
+    def dump(self):
+        print(self.name,self.promptText,self.replyText)
 
 class Log():                                                        # A live interaction traversal from a start state to an end is stored in a log
     def __init__(self):
@@ -28,6 +32,7 @@ class Log():                                                        # A live int
         self.steps = []
     def printMe(self):
         dbg = True
+        if dbg: print("\t\t--> log.printMe")
         if os.name == 'posix':
             pathmarker = '/' 
         else:
@@ -45,12 +50,11 @@ class Log():                                                        # A live int
                 if step.promptText:
                     outFile.write("system:%s\n" %step.promptText)
         outFile.close()
-        dbg = True
         
 class TestCase():                                                   # A test case in Cyara xml format
     def __init__(self):
         self.name = None
-        self.phoneNumber = None
+        self.phoneNumber = '18009254733'
         self.steps = []
     def dump(self):
         print("name=",self.name)
@@ -70,7 +74,8 @@ class TestCase():                                                   # A test cas
         return reparsed.toprettyxml(indent="  ")
 
     def cyaraXML(self):
-        dbg = False
+        dbg = True
+        if dbg: print("\t\t\t\t-->TestCase.CyaraXML")
         root = Element('TestSpecification')
         root.set('xmlns', 'TestSpecification.xsd')
         testCases = SubElement(root,'TestCases')
@@ -103,17 +108,19 @@ class TestCase():                                                   # A test cas
         callSteps = SubElement(steps,'CallSteps')
         ctr = 1
         for aStep in self.steps:
+            if dbg: print("\t\t\t\t\tTestcase.CyaraXML -- New Step")
             step = SubElement(callSteps,'Step')
             stepNo = SubElement(step,'StepNo')
             stepNo.text = str(ctr)
             stepDescription = SubElement(step,'Description')
             stepDescription.text = aStep.name
+            if dbg: print("\t\t\t\t\tTestcase.CyaraXML stepDescription=",stepDescription.text,aStep.name)
             expectedText = SubElement(step,'ExpectedText')
             replyText = SubElement(step,'ReplyText')
             expectedExchangeType = SubElement(step,'ExpectedExchangeType')
             expectedExchangeType.text = 'MPSR'
             replyExchangeType = SubElement(step,'ReplyExchangeType')
-            replyExchangeType.text = 'Speech'
+            replyExchangeType.text = ''
             minPauseTime = SubElement(step,'MinPauseTime')
             minPauseTime.text = '0'
             maxPauseTime = SubElement(step,'MaxPauseTime')
@@ -124,22 +131,31 @@ class TestCase():                                                   # A test cas
             minConfidenceLevel = SubElement(step,'MinConfidenceLevel')
             postSpeechSilenceTimeout = SubElement(step,'PostSpeechSilenceTimeout')
             # if there is a response, give it, else give the prompt name
-            if aStep.replyText != None:
-                expectedText.text = ''
-                replyText.text = aStep.replyText
-                minorThresholdTime.text = '0'
-                majorThresholdTime.text = '0'
-                minConfidenceLevel.text = '0'
-                postSpeechSilenceTimeout.text = '0'
-            else:
+            aStep.replyText = aStep.replyText.strip()
+            if dbg: print("\t\t\t\t\tTestcase.CyaraXM aStep.replyText=[",aStep.replyText,"]")
+            if aStep.type == 'prompt':                                             
+                if dbg: print("\t\t\t\t\t step type is prompt")
                 expectedText.text = aStep.promptText
-                replyText.text = ''
-                minorThresholdTime.text = '3'
-                majorThresholdTime.text = '5'
-                minConfidenceLevel.text = '80'
+                replyText.text = aStep.replyText
+                replyExchangeType.text  = aStep.replyType
+                minorThresholdTime.text = '5'
+                majorThresholdTime.text = '10'
+                minConfidenceLevel.text = '60'
+                if ctr == len(self.steps):                        # if this is the last step
+                    postSpeechSilenceTimeout.text = '3'
+                else:
+                    postSpeechSilenceTimeout.text = '0'
+            else:           # its a grammar state"
+                if dbg: print("\t\t\t\t\tstep type is grammar")
+                expectedText.text = aStep.promptText
+                replyText.text = aStep.replyText
+                replyExchangeType.text  = aStep.replyType
+                minorThresholdTime.text = '5'
+                majorThresholdTime.text = '10'
+                minConfidenceLevel.text = '60'
                 postSpeechSilenceTimeout.text = '3'               
             ctr = ctr + 1
-        if dbg: print(self.prettify(root))
+        if dbg: print("\t\t\t\t\tTestcase.CyaraXML ",self.prettify(root))
         return self.prettify(root)
 
     def journeyTXT(self,outputFile):
@@ -155,7 +171,8 @@ class TestCase():                                                   # A test cas
         
     
     def printMe(self,fileName,outputType):
-
+        dbg = True
+        if dbg: print("\t\t-->TestCase.printMe")
         if os.name == 'posix':
             pathmarker = '/' 
         else:
@@ -167,7 +184,7 @@ class TestCase():                                                   # A test cas
             if not os.path.exists(simdir):
                 os.makedirs(simdir)
             where = simdir + pathmarker + str(fileName) + ".xml"
-            if dbg: print("output directory =",where)
+            if dbg: print("\t\t\tTestCase.printMeoutput directory =",where)
             with open(where,"w") as outFile:
                 outFile.write("%s" %self.cyaraXML())
             outFile.close()
@@ -177,25 +194,29 @@ class TestCase():                                                   # A test cas
                 if not os.path.exists(simdir):
                     os.makedirs(simdir)
                 where = simdir + pathmarker + str(fileName) + ".txt"
-                if dbg: print("output directory =",where)
+                if dbg: print("\t\t\tTestCase.printMeoutput directory =",where)
 
                 self.journeyTXT(where)
 
 class Simulator():                                                  # Discovers and simulates paths through the statemachine, builds test cases
     def __init__(self,inputFileName,startStateName,**kwargs):
         dbg = True
-        if dbg: print("kwargs=",kwargs)
+        if dbg: print("-->Simulator: kwargs=",kwargs)
         if 'outputType' in kwargs:
             self.outputType = kwargs['outputType']
         else:
             self.outputType = 'CyaraXML'
+        if dbg: print("\tSimulator: 0, Makeing new state machine")
         mySimulation = StateMachine()
+        if dbg: print("\tSimulator: 1, Reading input file")
         mySimulation.readDrawIOXMLFile(inputFileName)
         mySimulation.makeGraph()
         grammarStateIDs = self.getGrammarStatesInGG(mySimulation,startStateName)
         states2inputs = {}
         possibleInputsList = []
         terseFlag = True
+        if dbg: print("\tSimulator: Loop - Going through each each grammar state")
+
         for aGrammarStateID in grammarStateIDs:                                 # for each grammar state grammar states after the start state
             aGrammarState = mySimulation.objects[aGrammarStateID]
             if aGrammarState.ObjectName != 'Global':
@@ -203,7 +224,7 @@ class Simulator():                                                  # Discovers 
                     if aGrammarState.Simulations:
                         possibleInputsList = aGrammarState.Simulations.split(';')
                         states2inputs[aGrammarStateID] = possibleInputsList
-                        if dbg: print("in runSimulations 0, possibleInputsList=",possibleInputsList)
+                        if dbg: print("\t\tSimulator: Grammer:",aGrammarState.ObjectName,", possibleInputsList=",possibleInputsList)
                     else:
                         print("Error: No simulations in grammar state",aGrammarState.ObjectName)
                         #exit()
@@ -214,28 +235,38 @@ class Simulator():                                                  # Discovers 
                         inputText = list(aGrammarInputDict.keys())                                    # get the text 
                         allText = allText + inputText                                           # add it into the whole
                     states2inputs[aGrammarStateID] = allText                                # so foo = {'25':['sure', 'ok', 'no', 'yup', ... 'start over', 'stop', ' go back to the beginning', ' restart', 'cancel']}
-        if dbg:
-            print("**in runSimulations 2, possibleInputsList",possibleInputsList)
-            print("**in runSimulations 3, states2inputs=",states2inputs)
+        if dbg: print("\tSimulator: 2, possibleInputsList",possibleInputsList)
         possibleInputs = list(itertools.product(*list(states2inputs.values())))
         if dbg:
-            print("**in runSimulations 4,states2inputs=",states2inputs)    
+            print("\tSimulator: 5, possibleInputs=",possibleInputs)
+
+
+        if dbg: print("\n\tSimulator: 5.5 Now that the set of possible input sequences has been created,\n\t loop through all the sequences creating a new simulation for each one\n") 
         grammarKeys = list(states2inputs.keys())
         simNumber = 0
         for aSim in possibleInputs:# for each possible set of inputs
-            if dbg: print("** new simulation",simNumber,"-------------------")
+            if dbg: print("\tSimulator: 6 ** new simulation",simNumber,"-------------------")
             simDict = {}
             ctr = 0
             for aKey in grammarKeys:                                                # create the inputs set for this run - this should be a value for each grammar
                 simDict[aKey] = aSim[ctr]
                 ctr = ctr + 1
-            if dbg: print("simDict=",simDict)
+            if dbg:
+                print("\tSimulator: 7 simDict=",simDict)
+                for aKey in simDict:
+                    if dbg: print("aKey'",aKey)
+                    aGram = mySimulation.objects[aKey]
+                    if dbg: print("label=",aGram.label)
             aSimulation = NewStateMachine(inputFileName)                            # create a fresh machine
             simNumber = simNumber + 1
+            if dbg: print("\tSimulator: 8 running state machine using simDict as inputs")
             atestCase = aSimulation.stateMachine.run(startStateName,True,simDict)               # run it using the set of inputs for this run
+            if dbg: print("\tSimulator: 8.1 aTestCase=",atestCase)
             if simNumber > 100:
                 break
+            if dbg: print("\tSimulator: 9 print out the results")
             atestCase.printMe(simNumber,self.outputType)
+        if dbg: print("<--Simulator")
             
     def walkGraph(self, sm, startStateName):
         ''' walks the graph from a start state to return a list of lists of state names '''
@@ -294,6 +325,7 @@ class State:                                                        # Base class
     def __init__(self,dic,sm):                                          # initialize
         for attrKey in list(dic.keys()):                                          # take all the items from the GUI xml and add to python object
             setattr(self,attrKey,dic[attrKey])
+        self.name = None
         self.prompts = None                                                 # list of prompts
         self.parents = []                                                   # all objects from the GUI can have parents and children
         self.children = []
@@ -787,6 +819,8 @@ class StateMachine:                                                 # Creates th
         self.log = None
 
     def addPrompt(self,newPrompt):                                      # adds a prompt
+        dbg = False
+        if dbg: print("-->adding a prompt:",newPrompt.name)
         if newPrompt.name in self.prompts:
             oldPrompt = self.prompts[newPrompt.name]
             if not oldPrompt.text == newPrompt.text:
@@ -933,7 +967,7 @@ class StateMachine:                                                 # Creates th
     def reconcileGrammarStateReferencesToGrammars(self):                # ensures that grammars referred to actually exist
         dbg = False
         semanticMeanings = []
-        if dbg: print("Info: Reconciling grammar references with grammars...")
+        if dbg: print("-->StateMachine.reconcileGrammarStateReferencesToGrammars\nInfo: Reconciling grammar references with grammars...")
         if dbg: print("Info: self.grammarStateIDs=",self.grammarStateIDs)
         for grammarStateID in self.grammarStateIDs:                                             # for each grammar state
             if dbg: print("Info: grammarStateID="+str(grammarStateID))
@@ -954,7 +988,9 @@ class StateMachine:                                                 # Creates th
             for key in grammarState.nextStates:                                                     # for each of the labelled arcs coming out of the state
                 if key != '$digits':
                     if dbg:print("Info: key=",key)
-                    if key.lower() not in semanticMeanings:                                                 # if the semantic tag does not exist in any of the referred to grammars
+                    if key not in semanticMeanings:                                                 # if the semantic tag does not exist in any of the referred to grammars
+
+                    #if key.lower() not in semanticMeanings:                                                 # if the semantic tag does not exist in any of the referred to grammars
                         msg = "Warning: the labelled arc",key,"in grammar state",grammarState.id,"is not in a grammar"
                         self.errorMsgs.append(msg)
                         self.reconcilationOK = False                                                            # print a warning
@@ -971,7 +1007,7 @@ class StateMachine:                                                 # Creates th
             if dbg: print("Info: No issues reconciling grammars.")
 
     def run(self,stateName=None,simulation=False,simDict=None):         # runs the state machine
-        dbg = False
+        dbg = True
         notDone = True
         if dbg:
             print("\nInfo: sm.run: starting.  stateName=",stateName,"simulation=",simulation,"simDict=",simDict)
@@ -993,6 +1029,7 @@ class StateMachine:                                                 # Creates th
         if simulation:
             if dbg: print("  Info: In stateMachine.run() 1.5.1: Building test case")
             testCase = TestCase()
+            testCase.name = "rename me"
         while notDone:
             # get the type of the current state
             stateType = currentState.__class__.__name__
@@ -1004,7 +1041,7 @@ class StateMachine:                                                 # Creates th
             stateCtr = stateCtr + 1
             if dbg: print("  Info: In stateMachine.run() 2.5: stateCtr=",stateCtr,"; maxLoops=",maxLoops)
             #if stateCtr > maxStates:
-            if stateCtr > 100:
+            if stateCtr > 20:
                 msg = "  Info: In stateMachine.run(): Terminating due to Max_States limit of",maxStates,".  To run more, increase Global Behavior Max_States value."
                 self.errorMsgs.append(msg)
                 break
@@ -1020,26 +1057,43 @@ class StateMachine:                                                 # Creates th
                     thisStep = Step()
                     thisStep.promptText = outputText
                     self.log.steps.append(thisStep)
-                    self.printOutput(outputText)
+                    self.printOutput(outputText)                                                                        # print the prompt output to the user
                     #userInput = input()
-                    userInput = self.getUserInput()
+                    userInput = self.getUserInput()                                                                     # get the user's input from keyboard
                     thisStep = Step()
                     thisStep.replyText = userInput
                     self.log.steps.append(thisStep)
 
                     #userInput = raw_input(outputText)                                                                   # display prompts and get the user's input
                 else:
-                    if dbg: print("  Info: System:",outputText)
                     step = Step()
-                    step.promptText = outputText
-                    if dbg: print("  Info: step.promptText",step.promptText)
-                    testCase.steps.append(step)
-                    userInput = simDict[currentState.id]
-                    if dbg: print("  Info: User:",userInput)
-                    step = Step()
-                    step.replyText = userInput
-                    if dbg: print("  Info: step.replyText =",step.replyText)
-                    testCase.steps.append(step)
+                    step.promptText = outputText                                                                        # assign the output prompt to the Cyara step
+                    if dbg: print("  Info: In stateMachine.run() 3.61 outputText=",outputText)
+                    if dbg: print("  Info: In stateMachine.run() 3.611 step.promptText=",step.promptText)
+
+                    #testCase.steps.append(step)
+                    userInput = simDict[currentState.id]                                                                # get the users input from the simulation
+
+                    if userInput[0:4] == "DTMF":
+                        if dbg: print("  Info: In stateMachine.run() 3.612 DTMF userInput[0:4]=",userInput[0:4])
+
+                        step.replyType = "DTMF"
+                        step.replyText = userInput[4:5]
+                    else:
+                        step.replyType  = "Speech"
+                        if userInput != "no input":
+                            if dbg: print("  Info: In stateMachine.run() 3.613 Speech userInput[0:4]=",userInput[0:4])
+                            step.replyText = userInput
+                        else:
+                            step.replyText = ''
+                                                                                              # assign the simulation response to the Cyara step
+                    if dbg: print("  Info: In stateMachine.run() 3.62 userInput=",userInput)
+                    step.name = currentState.label                                                                      # assign the grammar state label to the Cyara step
+                    if dbg: print("  Info: In stateMachine.run() 3.63 label=",step.name)
+                    if dbg: print("  Info: In stateMachine.run() 3.64 step.replyType=",step.replyType)
+                    if dbg: print("  Info: In stateMachine.run() 3.65 step.replyText=",step.replyText)
+
+                    testCase.steps.append(step)                                                                         # save the step to the test case
                 if dbg: print("  Info: In stateMachine.run() 3.7: userInput =",userInput)
                 meanings = currentState.parseInput(userInput,self)                                                           # parse the users input
                 if dbg: print("  Info: In stateMachine.run() 3.8: meanings =", meanings)
@@ -1133,7 +1187,7 @@ class StateMachine:                                                 # Creates th
                         else:
                             notDone = False                                                                             # else we are done
                             outputText = self.flushBuffer(promptsToPlay,RunResult())                                          # get all the output from prior states and current
-                            if dbg: print("  Info: In stateMachine.run() 3.5: outputText =",outputText)
+                            if dbg: print("  Info: In stateMachine.run() 5.3: outputText =",outputText)
                             if not simulation:
                                 print(outputText)
                                 #inputText = raw_input()
@@ -1148,6 +1202,8 @@ class StateMachine:                                                 # Creates th
                                 if len(outputText.strip()) > 0:
                                     step = Step()
                                     step.promptText = outputText
+                                    step.type = "grammar"
+                                    step.name = currentState.label 
                                     if dbg: print(" Info: step.promptText = ",step.promptText) 
                                     testCase.steps.append(step)
                     else:
@@ -1155,17 +1211,35 @@ class StateMachine:                                                 # Creates th
                         runResult = currentState.run(self)                                   
                         if dbg: print("  Info: In stateMachine.run() 6: runResult=",runResult.dump())
                         # get the prompts (if any) and append to the set to output
-                        if len(runResult.prompts) > 0:
-                            promptsToPlay.append(runResult.prompts[0])
+
+                        if simulation:
+                            if dbg: print("  Info: In stateMachine.run() 6.0: name=",currentState.ObjectName)
+                            if dbg: print("  Info: In stateMachine.run() 6.1: len(runResult.prompts=",len(runResult.prompts))
+
+                            if len(runResult.prompts) > 0:
+                                outputText = self.flushBuffer(promptsToPlay,runResult)  
+                                if dbg: print("  Info: In stateMachine.run() 6.2: outputText=",outputText)
+
+                                step = Step()
+                                step.promptText = outputText                                                                        # assign the output prompt to the Cyara step
+                                step.type = "prompt"
+                                step.replyText = ''                                                                          # assign the simulation response to the Cyara step
+                                step.name = currentState.label                                                                      # assign the grammar state label to the Cyara step
+                                testCase.steps.append(step)
+
+                        else:
+                            
+                            if len(runResult.prompts) > 0:
+                                promptsToPlay.append(runResult.prompts[0])                                          #  there are multiple prompts that have been saved up.
                         try:
                             nextStateID = runResult.nextState[0]
                             currentState = self.objects[nextStateID]
                         except KeyError:
-                            msg = "Error: In stateMachine.run() 6.1: Cannot find nextStateID:",nextStateID
+                            msg = "Error: In stateMachine.run() 7.1: Cannot find nextStateID:",nextStateID
                             self.errorMsgs.append(msg)
                             return
-                        if dbg: print("  Info: In stateMachine.run() 6.2: nextStateID=",nextStateID,"; name=",currentState.ObjectName)
-                        if dbg: print("  Info: In stateMachine.run() 6.3: promptsToPlay=",promptsToPlay)
+                            if dbg: print("  Info: In stateMachine.run() 7.2: nextStateID=",nextStateID,"; name=",currentState.ObjectName)
+                            if dbg: print("  Info: In stateMachine.run() 7.3: promptsToPlay=",promptsToPlay)
         if dbg: print("Info: sm.run: stopping")
         if simulation:
             return testCase
@@ -1212,19 +1286,20 @@ class NewStateMachine():
         if dbg: print("Finished Initializing")
 
 if __name__ == "__main__":
-    dbg = False
+    dbg = True
     #inputFileName = "VTK 2.5.xml"
     #startStateName = 'Module2Start'
     #nsm = NewStateMachine(inputFileName)
     #nsm.stateMachine.run(startStateName)
     #inputFileName = "VTK 2.6 DB.xml" 
     #startStateName = 'StartDBExample'
-    inputFileName = "VTK 2.5.xml" 
-    startStateName = 'WolframStart'
+    #inputFileName = "VTK 2.5.xml" 
+    #startStateName = 'WolframStart'
+    inputFileName = 'WAG.06.xml'
+    startStateName = 'Start'
     nsm = NewStateMachine(inputFileName)
-    nsm.stateMachine.run(startStateName)
-        # run the statemachine live with user input 
-    #mySimulator = Simulator(inputFileName,startStateName,outputType='cyaraXML')       # run a simulation using simulated inputs 
+    #nsm.stateMachine.run(startStateName)                                              # run the statemachine live with user input 
+    mySimulator = Simulator(inputFileName,startStateName,outputType='cyaraXML')        # run a simulation using simulated inputs 
     #mySimulator = Simulator(inputFileName,startStateName)       # run a simulation using simulated inputs 
     #mySimulator = Simulator(inputFileName,startStateName,outputType='journeyTXT')       # run a simulation using simulated inputs 
 
